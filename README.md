@@ -14,7 +14,7 @@ This skill runs a background daemon that connects your IM bots to iFlow CLI or C
 You (Telegram/Discord/Feishu/QQ/WeCom)
   ↕ Bot API
 Background Daemon (Node.js)
-  ↕ Agent SDK or Codex SDK (configurable via ITI_RUNTIME)
+  ↕ IflowDirectProvider (spawns iflow) or Codex SDK
 iFlow CLI / Codex → reads/writes your codebase
 ```
 
@@ -22,7 +22,7 @@ iFlow CLI / Codex → reads/writes your codebase
 
 - **Five IM platforms** — Telegram, Discord, Feishu/Lark, QQ, WeCom (企业微信) — enable any combination
 - **Interactive setup** — guided wizard collects tokens with step-by-step instructions
-- **Permission control** — tool calls require explicit approval via inline buttons (Telegram/Discord) or text `/perm` commands (Feishu/QQ/WeCom)
+- **Permission control** — tool calls require explicit approval via inline buttons (Telegram/Discord) or text `/perm` commands (Feishu/QQ/WeCom). *Note: Full interactive permissions available in Codex mode; iFlow direct mode uses `-y` flag for auto-approve.*
 - **Streaming preview** — see AI response as it types (Telegram & Discord)
 - **Session persistence** — conversations survive daemon restarts
 - **Secret protection** — tokens stored with `chmod 600`, auto-redacted in all logs
@@ -212,7 +212,7 @@ The `setup` wizard provides inline guidance for every step. Here's a summary:
 | `src/main.ts` | Daemon entry — assembles DI, starts bridge |
 | `src/config.ts` | Load/save `config.env`, map to bridge settings |
 | `src/store.ts` | JSON file BridgeStore (30 methods, write-through cache) |
-| `src/llm-provider.ts` | Agent SDK `query()` → SSE stream |
+| `src/llm-provider.ts` | `IflowDirectProvider` (spawns iflow directly) or `SDKLLMProvider` |
 | `src/codex-provider.ts` | Codex SDK `runStreamed()` → SSE stream |
 | `src/sse-utils.ts` | Shared SSE formatting helper |
 | `src/permission-gateway.ts` | Async bridge: SDK `canUseTool` ↔ IM buttons |
@@ -221,7 +221,78 @@ The `setup` wizard provides inline guidance for every step. Here's a summary:
 | `scripts/doctor.sh` | Health checks |
 | `SKILL.md` | iFlow CLI skill definition |
 
+### Runtime Architecture
+
+The bridge supports three runtime modes via `ITI_RUNTIME`:
+
+- **`iflow`** (default): Uses `IflowDirectProvider` — spawns the `iflow` CLI process directly and streams output. This is required because iFlow CLI does not support the Agent SDK's stream-json format (the SDK is designed for Claude Code CLI specifically).
+- **`codex`**: Uses `CodexProvider` — calls Codex SDK for OpenAI Codex sessions.
+- **`auto`**: Tries iFlow CLI first, falls back to Codex if `iflow` executable is not found.
+
+### Dependencies
+
+#### Dependency Graph
+
+```
+iflow-to-im-skill
+├── claude-to-im (github:Feng-H/Claude-to-IM)    ← Core bridge framework
+├── @anthropic-ai/claude-agent-sdk               ← For Codex SDK compatibility layer
+└── @openai/codex-sdk (optional)                 ← For ITI_RUNTIME=codex mode
+```
+
+#### Library Roles
+
+| Library | Source | Role |
+|---------|--------|------|
+| `claude-to-im` | GitHub: `Feng-H/Claude-to-IM` | Core bridge framework — provides `LLMProvider` interface, IM adapters, message routing, session management |
+| `@anthropic-ai/claude-agent-sdk` | npm | Anthropic's official SDK — retained for Codex SDK compatibility and potential future use |
+| `@openai/codex-sdk` | npm (optional) | OpenAI's official SDK — used when `ITI_RUNTIME=codex` |
+
+#### Why No iFlow SDK?
+
+iFlow CLI does **not** provide an official SDK. Unlike:
+
+- **Claude Code CLI** → `@anthropic-ai/claude-agent-sdk` (official)
+- **Codex CLI** → `@openai/codex-sdk` (official)
+- **iFlow CLI** → ❌ No SDK available
+
+**Solution: `IflowDirectProvider`**
+
+```typescript
+// Instead of SDK calls, we spawn the iflow process directly:
+const child = spawn('iflow', ['-p', prompt, '-m', model]);
+
+// Stream stdout back to the bridge
+child.stdout.on('data', (data) => {
+  controller.enqueue(sseEvent('text', data.toString()));
+});
+```
+
+This approach:
+1. Works with any CLI that outputs text to stdout
+2. No SDK dependency required for iFlow mode
+3. Passes `-y` flag for YOLO mode (auto-approve tools) when `permissionMode=acceptEdits`
+
+#### Architecture Relationship
+
+```
+claude-to-im (Framework)
+├── lib/bridge/host.js           → Defines LLMProvider interface
+├── lib/bridge/context.js        → Bridge context & DI container
+├── lib/bridge/bridge-manager.js → Start/stop lifecycle
+└── lib/bridge/adapters/         → IM platform adapters (Telegram, Discord, Feishu, QQ, WeCom)
+
+iflow-to-im-skill (Implementation)
+├── llm-provider.ts              → Implements LLMProvider for iFlow (IflowDirectProvider)
+├── codex-provider.ts            → Implements LLMProvider for Codex
+├── store.ts                     → Implements BridgeStore (JSON file persistence)
+├── config.ts                    → Configuration management
+└── main.ts                      → Assembles DI, calls bridgeManager.start()
+```
+
 ### Permission flow
+
+**SDK mode (Codex / Claude Code CLI):**
 
 ```
 1. AI wants to use a tool (e.g., Edit file)
@@ -231,6 +302,12 @@ The `setup` wizard provides inline guidance for every step. Here's a summary:
 5. User taps Allow → bridge resolves the pending permission
 6. SDK continues tool execution → result streamed back to IM
 ```
+
+**iFlow Direct mode (`ITI_RUNTIME=iflow`):**
+
+When `permissionMode=acceptEdits`, the bridge passes the `-y` flag to iFlow CLI (YOLO mode), which auto-approves all tool calls. For interactive permission approval, set `permissionMode=default` — iFlow CLI will prompt interactively in the terminal where the daemon runs.
+
+> **Note:** Full interactive permission UI in IM is only available in SDK mode (Codex). iFlow direct mode has limited permission interactivity due to CLI design.
 
 ## Troubleshooting
 

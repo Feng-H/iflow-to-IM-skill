@@ -14,7 +14,7 @@
 你（Telegram/Discord/飞书/QQ/企业微信）
   ↕ Bot API
 后台守护进程（Node.js）
-  ↕ Agent SDK 或 Codex SDK（通过 ITI_RUNTIME 配置）
+  ↕ IflowDirectProvider（直接启动 iflow）或 Codex SDK
 iFlow CLI / Codex → 读写你的代码库
 ```
 
@@ -22,7 +22,7 @@ iFlow CLI / Codex → 读写你的代码库
 
 - **五大 IM 平台** — Telegram、Discord、飞书/Lark、QQ、企业微信 — 可任意组合启用
 - **交互式配置** — 引导式向导收集令牌，提供分步说明
-- **权限控制** — 工具调用需通过内联按钮（Telegram/Discord）或文本 `/perm` 命令（飞书/QQ/企业微信）显式批准
+- **权限控制** — 工具调用需通过内联按钮（Telegram/Discord）或文本 `/perm` 命令（飞书/QQ/企业微信）显式批准。*注：完整交互式权限仅 Codex 模式支持；iFlow 直接模式使用 `-y` 标志自动批准。*
 - **流式预览** — 实时查看 AI 的输出（Telegram 和 Discord 支持）
 - **会话持久化** — 对话在守护进程重启后保留
 - **密钥保护** — 令牌以 `chmod 600` 存储，所有日志自动脱敏
@@ -212,7 +212,7 @@ bash ~/code/iflow-to-IM-skill/scripts/install-codex.sh --link
 | `src/main.ts` | 守护进程入口 — 组装 DI，启动桥接 |
 | `src/config.ts` | 加载/保存 `config.env`，映射到桥接设置 |
 | `src/store.ts` | JSON 文件 BridgeStore（30 个方法，写透缓存）|
-| `src/llm-provider.ts` | Agent SDK `query()` → SSE 流 |
+| `src/llm-provider.ts` | `IflowDirectProvider`（直接启动 iflow）或 `SDKLLMProvider` |
 | `src/codex-provider.ts` | Codex SDK `runStreamed()` → SSE 流 |
 | `src/sse-utils.ts` | 共享 SSE 格式化工具 |
 | `src/permission-gateway.ts` | 异步桥接：SDK `canUseTool` ↔ IM 按钮 |
@@ -221,7 +221,78 @@ bash ~/code/iflow-to-IM-skill/scripts/install-codex.sh --link
 | `scripts/doctor.sh` | 健康检查 |
 | `SKILL.md` | iFlow CLI Skill 定义 |
 
+### 运行时架构
+
+桥接通过 `ITI_RUNTIME` 支持三种运行时模式：
+
+- **`iflow`**（默认）：使用 `IflowDirectProvider` — 直接启动 `iflow` CLI 进程并流式输出。这是必需的，因为 iFlow CLI 不支持 Agent SDK 的 stream-json 格式（该 SDK 专为 Claude Code CLI 设计）。
+- **`codex`**：使用 `CodexProvider` — 调用 Codex SDK 进行 OpenAI Codex 会话。
+- **`auto`**：优先尝试 iFlow CLI，如果找不到 `iflow` 可执行文件则回退到 Codex。
+
+### 依赖关系
+
+#### 依赖图
+
+```
+iflow-to-im-skill
+├── claude-to-im (github:Feng-H/Claude-to-IM)    ← 核心桥接框架
+├── @anthropic-ai/claude-agent-sdk               ← 用于 Codex SDK 兼容层
+└── @openai/codex-sdk (optional)                 ← 用于 ITI_RUNTIME=codex 模式
+```
+
+#### 各库作用
+
+| 库 | 来源 | 作用 |
+|---|---|---|
+| `claude-to-im` | GitHub: `Feng-H/Claude-to-IM` | 核心桥接框架 — 提供 `LLMProvider` 接口、IM 适配器、消息路由、会话管理 |
+| `@anthropic-ai/claude-agent-sdk` | npm | Anthropic 官方 SDK — 保留用于 Codex SDK 兼容及未来扩展 |
+| `@openai/codex-sdk` | npm（可选）| OpenAI 官方 SDK — 用于 `ITI_RUNTIME=codex` 模式 |
+
+#### 为什么没有 iFlow SDK？
+
+iFlow CLI **没有**提供官方 SDK。对比：
+
+- **Claude Code CLI** → `@anthropic-ai/claude-agent-sdk`（官方）
+- **Codex CLI** → `@openai/codex-sdk`（官方）
+- **iFlow CLI** → ❌ 无 SDK
+
+**解决方案：`IflowDirectProvider`**
+
+```typescript
+// 不使用 SDK，而是直接启动 iflow 进程：
+const child = spawn('iflow', ['-p', prompt, '-m', model]);
+
+// 将 stdout 流式返回给桥接
+child.stdout.on('data', (data) => {
+  controller.enqueue(sseEvent('text', data.toString()));
+});
+```
+
+这种方式的优点：
+1. 适用于任何将文本输出到 stdout 的 CLI
+2. iFlow 模式无需 SDK 依赖
+3. 当 `permissionMode=acceptEdits` 时传递 `-y` 标志启用 YOLO 模式（自动批准工具调用）
+
+#### 架构关系
+
+```
+claude-to-im（框架层）
+├── lib/bridge/host.js           → 定义 LLMProvider 接口
+├── lib/bridge/context.js        → 桥接上下文 & DI 容器
+├── lib/bridge/bridge-manager.js → 启动/停止生命周期
+└── lib/bridge/adapters/         → IM 平台适配器（Telegram、Discord、飞书、QQ、企业微信）
+
+iflow-to-im-skill（实现层）
+├── llm-provider.ts              → 实现 LLMProvider（iFlow 使用 IflowDirectProvider）
+├── codex-provider.ts            → 实现 LLMProvider（Codex）
+├── store.ts                     → 实现 BridgeStore（JSON 文件持久化）
+├── config.ts                    → 配置管理
+└── main.ts                      → 组装 DI，调用 bridgeManager.start()
+```
+
 ### 权限流程
+
+**SDK 模式（Codex / Claude Code CLI）：**
 
 ```
 1. AI 想要使用工具（如编辑文件）
@@ -231,6 +302,12 @@ bash ~/code/iflow-to-IM-skill/scripts/install-codex.sh --link
 5. 用户点击允许 → 桥接解决待处理权限
 6. SDK 继续工具执行 → 结果流式返回到 IM
 ```
+
+**iFlow 直接模式（`ITI_RUNTIME=iflow`）：**
+
+当 `permissionMode=acceptEdits` 时，桥接会向 iFlow CLI 传递 `-y` 标志（YOLO 模式），自动批准所有工具调用。如需交互式权限批准，设置 `permissionMode=default` — iFlow CLI 会在守护进程运行的终端中交互式提示。
+
+> **注意：** IM 中的完整交互式权限 UI 仅在 SDK 模式（Codex）下可用。iFlow 直接模式由于 CLI 设计限制，权限交互能力有限。
 
 ## 故障排查
 
