@@ -1,5 +1,5 @@
 /**
- * Daemon entry point for claude-to-im-skill.
+ * Daemon entry point for iflow-to-im-skill.
  *
  * Assembles all DI implementations and starts the bridge.
  */
@@ -14,22 +14,22 @@ import * as bridgeManager from 'claude-to-im/src/lib/bridge/bridge-manager.js';
 import 'claude-to-im/src/lib/bridge/adapters/index.js';
 
 import type { LLMProvider } from 'claude-to-im/src/lib/bridge/host.js';
-import { loadConfig, configToSettings, CTI_HOME } from './config.js';
+import { loadConfig, configToSettings, ITI_HOME } from './config.js';
 import type { Config } from './config.js';
 import { JsonFileStore } from './store.js';
-import { SDKLLMProvider, resolveClaudeCliPath } from './llm-provider.js';
+import { SDKLLMProvider, resolveIflowCliPath } from './llm-provider.js';
 import { PendingPermissions } from './permission-gateway.js';
 import { setupLogger } from './logger.js';
 
-const RUNTIME_DIR = path.join(CTI_HOME, 'runtime');
+const RUNTIME_DIR = path.join(ITI_HOME, 'runtime');
 const STATUS_FILE = path.join(RUNTIME_DIR, 'status.json');
 const PID_FILE = path.join(RUNTIME_DIR, 'bridge.pid');
 
 /**
  * Resolve the LLM provider based on the runtime setting.
- * - 'claude' (default): uses Claude Code SDK via SDKLLMProvider
+ * - 'iflow' (default): uses iFlow CLI
  * - 'codex': uses @openai/codex-sdk via CodexProvider
- * - 'auto': tries Claude first, falls back to Codex
+ * - 'auto': tries iFlow first, falls back to Codex
  */
 async function resolveProvider(config: Config, pendingPerms: PendingPermissions): Promise<LLMProvider> {
   const runtime = config.runtime;
@@ -40,28 +40,28 @@ async function resolveProvider(config: Config, pendingPerms: PendingPermissions)
   }
 
   if (runtime === 'auto') {
-    const cliPath = resolveClaudeCliPath();
+    const cliPath = resolveIflowCliPath();
     if (cliPath) {
-      console.log(`[claude-to-im] Auto: using Claude CLI at ${cliPath}`);
+      console.log(`[iflow-to-im] Auto: using iFlow CLI at ${cliPath}`);
       return new SDKLLMProvider(pendingPerms, cliPath, config.autoApprove);
     }
-    console.log('[claude-to-im] Auto: Claude CLI not found, falling back to Codex');
+    console.log('[iflow-to-im] Auto: iFlow CLI not found, falling back to Codex');
     const { CodexProvider } = await import('./codex-provider.js');
     return new CodexProvider(pendingPerms);
   }
 
-  // Default: claude
-  const cliPath = resolveClaudeCliPath();
+  // Default: iflow
+  const cliPath = resolveIflowCliPath();
   if (!cliPath) {
     console.error(
-      '[claude-to-im] FATAL: Cannot find the `claude` CLI executable.\n' +
-      '  Tried: CTI_CLAUDE_CODE_EXECUTABLE env, /usr/local/bin/claude, /opt/homebrew/bin/claude, ~/.npm-global/bin/claude, ~/.local/bin/claude\n' +
-      '  Fix: Install Claude Code CLI (https://docs.anthropic.com/en/docs/claude-code) or set CTI_CLAUDE_CODE_EXECUTABLE=/path/to/claude\n' +
-      '  Or: Set CTI_RUNTIME=codex to use Codex instead',
+      '[iflow-to-im] FATAL: Cannot find the `iflow` CLI executable.\n' +
+      '  Tried: ITI_IFLOW_CLI_EXECUTABLE env, /usr/local/bin/iflow, /opt/homebrew/bin/iflow, ~/.npm-global/bin/iflow, ~/.local/bin/iflow\n' +
+      '  Fix: Install iFlow CLI or set ITI_IFLOW_CLI_EXECUTABLE=/path/to/iflow\n' +
+      '  Or: Set ITI_RUNTIME=codex to use Codex instead',
     );
     process.exit(1);
   }
-  console.log(`[claude-to-im] Using Claude CLI: ${cliPath}`);
+  console.log(`[iflow-to-im] Using iFlow CLI: ${cliPath}`);
   return new SDKLLMProvider(pendingPerms, cliPath, config.autoApprove);
 }
 
@@ -90,13 +90,13 @@ async function main(): Promise<void> {
   setupLogger();
 
   const runId = crypto.randomUUID();
-  console.log(`[claude-to-im] Starting bridge (run_id: ${runId})`);
+  console.log(`[iflow-to-im] Starting bridge (run_id: ${runId})`);
 
   const settings = configToSettings(config);
   const store = new JsonFileStore(settings);
   const pendingPerms = new PendingPermissions();
   const llm = await resolveProvider(config, pendingPerms);
-  console.log(`[claude-to-im] Runtime: ${config.runtime}`);
+  console.log(`[iflow-to-im] Runtime: ${config.runtime}`);
 
   const gateway = {
     resolvePendingPermission: (id: string, resolution: { behavior: 'allow' | 'deny'; message?: string }) =>
@@ -119,11 +119,11 @@ async function main(): Promise<void> {
           startedAt: new Date().toISOString(),
           channels: config.enabledChannels,
         });
-        console.log(`[claude-to-im] Bridge started (PID: ${process.pid}, channels: ${config.enabledChannels.join(', ')})`);
+        console.log(`[iflow-to-im] Bridge started (PID: ${process.pid}, channels: ${config.enabledChannels.join(', ')})`);
       },
       onBridgeStop: () => {
         writeStatus({ running: false });
-        console.log('[claude-to-im] Bridge stopped');
+        console.log('[iflow-to-im] Bridge stopped');
       },
     },
   });
@@ -136,7 +136,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     const reason = signal ? `signal: ${signal}` : 'shutdown requested';
-    console.log(`[claude-to-im] Shutting down (${reason})...`);
+    console.log(`[iflow-to-im] Shutting down (${reason})...`);
     pendingPerms.denyAll();
     await bridgeManager.stop();
     writeStatus({ running: false, lastExitReason: reason });
@@ -149,19 +149,19 @@ async function main(): Promise<void> {
 
   // ── Exit diagnostics ──
   process.on('unhandledRejection', (reason) => {
-    console.error('[claude-to-im] unhandledRejection:', reason instanceof Error ? reason.stack || reason.message : reason);
+    console.error('[iflow-to-im] unhandledRejection:', reason instanceof Error ? reason.stack || reason.message : reason);
     writeStatus({ running: false, lastExitReason: `unhandledRejection: ${reason instanceof Error ? reason.message : String(reason)}` });
   });
   process.on('uncaughtException', (err) => {
-    console.error('[claude-to-im] uncaughtException:', err.stack || err.message);
+    console.error('[iflow-to-im] uncaughtException:', err.stack || err.message);
     writeStatus({ running: false, lastExitReason: `uncaughtException: ${err.message}` });
     process.exit(1);
   });
   process.on('beforeExit', (code) => {
-    console.log(`[claude-to-im] beforeExit (code: ${code})`);
+    console.log(`[iflow-to-im] beforeExit (code: ${code})`);
   });
   process.on('exit', (code) => {
-    console.log(`[claude-to-im] exit (code: ${code})`);
+    console.log(`[iflow-to-im] exit (code: ${code})`);
   });
 
   // ── Heartbeat to keep event loop alive ──
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error('[claude-to-im] Fatal error:', err instanceof Error ? err.stack || err.message : err);
+  console.error('[iflow-to-im] Fatal error:', err instanceof Error ? err.stack || err.message : err);
   try { writeStatus({ running: false, lastExitReason: `fatal: ${err instanceof Error ? err.message : String(err)}` }); } catch { /* ignore */ }
   process.exit(1);
 });

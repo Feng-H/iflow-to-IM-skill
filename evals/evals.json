@@ -1,9 +1,9 @@
 {
-  "skill_name": "claude-to-im",
+  "skill_name": "iflow-to-im",
   "evals": [
     {
       "id": 1,
-      "prompt": "帮我设置 Telegram 机器人，我想用手机给 Claude 发消息",
+      "prompt": "帮我设置 Telegram 机器人，我想用手机给 AI 发消息",
       "expected_output": "Should trigger the skill, identify 'setup' subcommand, read setup-guides.md, and start the interactive Telegram setup wizard asking for Bot Token",
       "files": []
     },
@@ -23,6 +23,12 @@
       "id": 4,
       "prompt": "查看日志 200",
       "expected_output": "Should trigger the skill, identify 'logs' subcommand with N=200, and run daemon.sh logs 200",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "帮我配置企业微信机器人",
+      "expected_output": "Should trigger the skill, identify 'setup' subcommand, read setup-guides.md for WeCom, and guide user through WeCom enterprise application setup with Corp ID, Agent ID, and Agent Secret",
       "files": []
     }
   ]

@@ -221,3 +221,39 @@ When enabled, images sent by users in QQ private chat will be forwarded to the A
 ### Max Image Size MB (optional)
 
 Default: `20`. Maximum image file size in MB that will be forwarded to the AI agent. Images larger than this limit are ignored.
+
+---
+
+## WeCom (企业微信)
+
+> 企业微信 Bot 模式：只需 Bot ID 和 Secret 即可使用。
+
+### Bot ID 和 Bot Secret（必需）
+
+**如何获取企业微信 Bot 凭证：**
+1. 登录 [企业微信管理后台](https://work.weixin.qq.com/wework_admin/frame)
+2. 在应用管理中找到或创建应用
+3. 在应用详情页面找到 Bot 相关凭证：
+   - **Bot ID**
+   - **Bot Secret**（点击查看）
+
+### Allowed User IDs（可选）
+
+**如何获取用户 ID：**
+1. 在管理后台点击「通讯录」
+2. 点击用户详情，可以看到「账号」（即 userid）
+3. 或者通过 API 获取
+
+Enter comma-separated user IDs to restrict access. Leave empty to allow all users who can message the bot.
+
+### 常见问题
+
+**Q: 机器人不回复消息？**
+1. 确认应用已发布（非草稿状态）
+2. 检查用户是否在「可见范围」内
+3. 检查 Allowed Users 配置
+
+**Q: 凭证验证失败？**
+1. 检查 Bot ID 和 Secret 是否正确
+2. 确认 IP 白名单设置（如有）
+3. 检查网络连接

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-CTI_HOME="$HOME/.claude-to-im"
-CONFIG_FILE="$CTI_HOME/config.env"
-PID_FILE="$CTI_HOME/runtime/bridge.pid"
-LOG_FILE="$CTI_HOME/logs/bridge.log"
+ITI_HOME="$HOME/.iflow-to-im"
+CONFIG_FILE="$ITI_HOME/config.env"
+PID_FILE="$ITI_HOME/runtime/bridge.pid"
+LOG_FILE="$ITI_HOME/logs/bridge.log"
 
 PASS=0
 FAIL=0
@@ -34,47 +34,47 @@ fi
 
 # --- Read runtime setting ---
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CTI_RUNTIME=$(grep "^CTI_RUNTIME=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"')
-CTI_RUNTIME="${CTI_RUNTIME:-claude}"
-echo "Runtime: $CTI_RUNTIME"
+ITI_RUNTIME=$(grep "^ITI_RUNTIME=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"')
+ITI_RUNTIME="${ITI_RUNTIME:-iflow}"
+echo "Runtime: $ITI_RUNTIME"
 echo ""
 
-# --- Claude CLI available (claude/auto modes) ---
-if [ "$CTI_RUNTIME" = "claude" ] || [ "$CTI_RUNTIME" = "auto" ]; then
-  if command -v claude &>/dev/null; then
-    CLAUDE_VER=$(claude --version 2>/dev/null || echo "unknown")
-    check "Claude CLI available (${CLAUDE_VER})" 0
+# --- iFlow CLI available (iflow/auto modes) ---
+if [ "$ITI_RUNTIME" = "iflow" ] || [ "$ITI_RUNTIME" = "auto" ]; then
+  if command -v iflow &>/dev/null; then
+    IFLOW_VER=$(iflow --version 2>/dev/null || echo "unknown")
+    check "iFlow CLI available (${IFLOW_VER})" 0
   else
-    if [ "$CTI_RUNTIME" = "claude" ]; then
-      check "Claude CLI available (not found in PATH)" 1
+    if [ "$ITI_RUNTIME" = "iflow" ]; then
+      check "iFlow CLI available (not found in PATH)" 1
     else
-      check "Claude CLI available (not found — will use Codex fallback)" 0
+      check "iFlow CLI available (not found — will use Codex fallback)" 0
     fi
   fi
 
   # --- SDK cli.js resolvable ---
   SDK_CLI="$SKILL_DIR/node_modules/@anthropic-ai/claude-agent-sdk/dist/cli.js"
   if [ -f "$SDK_CLI" ]; then
-    check "Claude SDK cli.js exists ($SDK_CLI)" 0
+    check "SDK cli.js exists ($SDK_CLI)" 0
   else
-    if [ "$CTI_RUNTIME" = "claude" ]; then
-      check "Claude SDK cli.js exists (not found — run 'npm install' in $SKILL_DIR)" 1
+    if [ "$ITI_RUNTIME" = "iflow" ]; then
+      check "SDK cli.js exists (not found — run 'npm install' in $SKILL_DIR)" 1
     else
-      check "Claude SDK cli.js exists (not found — OK for auto/codex mode)" 0
+      check "SDK cli.js exists (not found — OK for auto/codex mode)" 0
     fi
   fi
 fi
 
 # --- Codex checks (codex/auto modes) ---
-if [ "$CTI_RUNTIME" = "codex" ] || [ "$CTI_RUNTIME" = "auto" ]; then
+if [ "$ITI_RUNTIME" = "codex" ] || [ "$ITI_RUNTIME" = "auto" ]; then
   if command -v codex &>/dev/null; then
     CODEX_VER=$(codex --version 2>/dev/null || echo "unknown")
     check "Codex CLI available (${CODEX_VER})" 0
   else
-    if [ "$CTI_RUNTIME" = "codex" ]; then
+    if [ "$ITI_RUNTIME" = "codex" ]; then
       check "Codex CLI available (not found in PATH)" 1
     else
-      check "Codex CLI available (not found — will use Claude)" 0
+      check "Codex CLI available (not found — will use iFlow)" 0
     fi
   fi
 
@@ -83,17 +83,17 @@ if [ "$CTI_RUNTIME" = "codex" ] || [ "$CTI_RUNTIME" = "auto" ]; then
   if [ -d "$CODEX_SDK" ]; then
     check "@openai/codex-sdk installed" 0
   else
-    if [ "$CTI_RUNTIME" = "codex" ]; then
+    if [ "$ITI_RUNTIME" = "codex" ]; then
       check "@openai/codex-sdk installed (not found — run 'npm install' in $SKILL_DIR)" 1
     else
-      check "@openai/codex-sdk installed (not found — OK for auto/claude mode)" 0
+      check "@openai/codex-sdk installed (not found — OK for auto/iflow mode)" 0
     fi
   fi
 
-  # Check Codex auth: any of CTI_CODEX_API_KEY / CODEX_API_KEY / OPENAI_API_KEY,
+  # Check Codex auth: any of ITI_CODEX_API_KEY / CODEX_API_KEY / OPENAI_API_KEY,
   # or `codex auth status` showing logged-in (interactive login).
   CODEX_AUTH=1
-  if [ -n "${CTI_CODEX_API_KEY:-}" ] || [ -n "${CODEX_API_KEY:-}" ] || [ -n "${OPENAI_API_KEY:-}" ]; then
+  if [ -n "${ITI_CODEX_API_KEY:-}" ] || [ -n "${CODEX_API_KEY:-}" ] || [ -n "${OPENAI_API_KEY:-}" ]; then
     CODEX_AUTH=0
   elif command -v codex &>/dev/null; then
     CODEX_AUTH_OUT=$(codex auth status 2>&1 || true)
@@ -104,7 +104,7 @@ if [ "$CTI_RUNTIME" = "codex" ] || [ "$CTI_RUNTIME" = "auto" ]; then
   if [ "$CODEX_AUTH" = "0" ]; then
     check "Codex auth available (API key or login)" 0
   else
-    if [ "$CTI_RUNTIME" = "codex" ]; then
+    if [ "$ITI_RUNTIME" = "codex" ]; then
       check "Codex auth available (set OPENAI_API_KEY or run 'codex auth login')" 1
     else
       check "Codex auth available (not found — needed only for Codex fallback)" 0
@@ -146,11 +146,11 @@ fi
 get_config() { grep "^$1=" "$CONFIG_FILE" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^["'"'"']//;s/["'"'"']$//'; }
 
 if [ -f "$CONFIG_FILE" ]; then
-  CTI_CHANNELS=$(get_config CTI_ENABLED_CHANNELS)
+  ITI_CHANNELS=$(get_config ITI_ENABLED_CHANNELS)
 
   # --- Telegram ---
-  if echo "$CTI_CHANNELS" | grep -q telegram; then
-    TG_TOKEN=$(get_config CTI_TG_BOT_TOKEN)
+  if echo "$ITI_CHANNELS" | grep -q telegram; then
+    TG_TOKEN=$(get_config ITI_TG_BOT_TOKEN)
     if [ -n "$TG_TOKEN" ]; then
       TG_RESULT=$(curl -s --max-time 5 "https://api.telegram.org/bot${TG_TOKEN}/getMe" 2>/dev/null || echo '{"ok":false}')
       if echo "$TG_RESULT" | grep -q '"ok":true'; then
@@ -164,10 +164,10 @@ if [ -f "$CONFIG_FILE" ]; then
   fi
 
   # --- Feishu ---
-  if echo "$CTI_CHANNELS" | grep -q feishu; then
-    FS_APP_ID=$(get_config CTI_FEISHU_APP_ID)
-    FS_SECRET=$(get_config CTI_FEISHU_APP_SECRET)
-    FS_DOMAIN=$(get_config CTI_FEISHU_DOMAIN)
+  if echo "$ITI_CHANNELS" | grep -q feishu; then
+    FS_APP_ID=$(get_config ITI_FEISHU_APP_ID)
+    FS_SECRET=$(get_config ITI_FEISHU_APP_SECRET)
+    FS_DOMAIN=$(get_config ITI_FEISHU_DOMAIN)
     FS_DOMAIN="${FS_DOMAIN:-https://open.feishu.cn}"
     if [ -n "$FS_APP_ID" ] && [ -n "$FS_SECRET" ]; then
       FEISHU_RESULT=$(curl -s --max-time 5 -X POST "${FS_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal" \
@@ -184,9 +184,9 @@ if [ -f "$CONFIG_FILE" ]; then
   fi
 
   # --- QQ ---
-  if echo "$CTI_CHANNELS" | grep -q qq; then
-    QQ_APP_ID=$(get_config CTI_QQ_APP_ID)
-    QQ_APP_SECRET=$(get_config CTI_QQ_APP_SECRET)
+  if echo "$ITI_CHANNELS" | grep -q qq; then
+    QQ_APP_ID=$(get_config ITI_QQ_APP_ID)
+    QQ_APP_SECRET=$(get_config ITI_QQ_APP_SECRET)
     if [ -n "$QQ_APP_ID" ] && [ -n "$QQ_APP_SECRET" ]; then
       QQ_TOKEN_RESULT=$(curl -s --max-time 10 -X POST "https://bots.qq.com/app/getAppAccessToken" \
         -H "Content-Type: application/json" \
@@ -211,8 +211,8 @@ if [ -f "$CONFIG_FILE" ]; then
   fi
 
   # --- Discord ---
-  if echo "$CTI_CHANNELS" | grep -q discord; then
-    DC_TOKEN=$(get_config CTI_DISCORD_BOT_TOKEN)
+  if echo "$ITI_CHANNELS" | grep -q discord; then
+    DC_TOKEN=$(get_config ITI_DISCORD_BOT_TOKEN)
     if [ -n "$DC_TOKEN" ]; then
       if echo "${DC_TOKEN}" | grep -qE '^[A-Za-z0-9_-]{20,}\.'; then
         check "Discord bot token format" 0
@@ -223,10 +223,21 @@ if [ -f "$CONFIG_FILE" ]; then
       check "Discord bot token configured" 1
     fi
   fi
+
+  # --- WeCom (企业微信) ---
+  if echo "$ITI_CHANNELS" | grep -q wecom; then
+    WECOM_BOT_ID=$(get_config ITI_WECOM_BOT_ID)
+    WECOM_BOT_SECRET=$(get_config ITI_WECOM_BOT_SECRET)
+    if [ -n "$WECOM_BOT_ID" ] && [ -n "$WECOM_BOT_SECRET" ]; then
+      check "WeCom (企业微信) credentials configured" 0
+    else
+      check "WeCom (企业微信) credentials configured" 1
+    fi
+  fi
 fi
 
 # --- Log directory writable ---
-LOG_DIR="$CTI_HOME/logs"
+LOG_DIR="$ITI_HOME/logs"
 if [ -d "$LOG_DIR" ] && [ -w "$LOG_DIR" ]; then
   check "Log directory is writable" 0
 else

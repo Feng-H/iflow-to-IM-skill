@@ -2,7 +2,7 @@
  * JSON file-backed BridgeStore implementation.
  *
  * Uses in-memory Maps as cache with write-through persistence
- * to JSON files in ~/.claude-to-im/data/.
+ * to JSON files in ~/.iflow-to-im/data/.
  */
 
 import fs from 'node:fs';
@@ -20,9 +20,9 @@ import type {
   UpsertChannelBindingInput,
 } from 'claude-to-im/src/lib/bridge/host.js';
 import type { ChannelBinding, ChannelType } from 'claude-to-im/src/lib/bridge/types.js';
-import { CTI_HOME } from './config.js';
+import { ITI_HOME } from './config.js';
 
-const DATA_DIR = path.join(CTI_HOME, 'data');
+const DATA_DIR = path.join(ITI_HOME, 'data');
 const MESSAGES_DIR = path.join(DATA_DIR, 'messages');
 
 // ── Helpers ──
@@ -448,6 +448,12 @@ export class JsonFileStore implements BridgeStore {
     link.resolved = true;
     this.persistPermissions();
     return true;
+  }
+
+  listPendingPermissionLinksByChat(chatId: string): PermissionLinkRecord[] {
+    return Array.from(this.permissionLinks.values()).filter(
+      (link) => link.chatId === chatId && !link.resolved
+    );
   }
 
   // ── Channel Offsets ──

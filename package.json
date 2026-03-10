@@ -1,17 +1,17 @@
 {
-  "name": "claude-to-im-skill",
+  "name": "iflow-to-im-skill",
   "version": "0.1.0",
-  "description": "Claude Code Skill: Bridge IM platforms (Telegram, Discord, Feishu, QQ) to Claude Code sessions",
+  "description": "iFlow CLI Skill: Bridge IM platforms (Telegram, Discord, Feishu, QQ, WeCom) to iFlow CLI sessions",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.js",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/main.ts",
-    "test": "CTI_HOME=$(mktemp -d) node --test --import tsx --test-timeout=15000 src/__tests__/*.test.ts"
+    "test": "ITI_HOME=$(mktemp -d) node --test --import tsx --test-timeout=15000 src/__tests__/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.62",
-    "claude-to-im": "github:op7418/claude-to-im"
+    "claude-to-im": "github:Feng-H/Claude-to-IM"
   },
   "optionalDependencies": {
     "@openai/codex-sdk": "^0.110.0"

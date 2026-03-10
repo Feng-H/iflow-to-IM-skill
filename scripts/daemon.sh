@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
-CTI_HOME="${CTI_HOME:-$HOME/.claude-to-im}"
+ITI_HOME="${ITI_HOME:-$HOME/.iflow-to-im}"
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PID_FILE="$CTI_HOME/runtime/bridge.pid"
-STATUS_FILE="$CTI_HOME/runtime/status.json"
-LOG_FILE="$CTI_HOME/logs/bridge.log"
+PID_FILE="$ITI_HOME/runtime/bridge.pid"
+STATUS_FILE="$ITI_HOME/runtime/status.json"
+LOG_FILE="$ITI_HOME/logs/bridge.log"
 
 # ── Common helpers ──
 
-ensure_dirs() { mkdir -p "$CTI_HOME"/{data,logs,runtime,data/messages}; }
+ensure_dirs() { mkdir -p "$ITI_HOME"/{data,logs,runtime,data/messages}; }
 
 ensure_built() {
   local need_build=0
@@ -29,13 +29,14 @@ ensure_built() {
 
 # Clean environment for subprocess isolation.
 clean_env() {
+  unset IFLOWCODE 2>/dev/null || true
   unset CLAUDECODE 2>/dev/null || true
 
   local runtime
-  runtime=$(grep "^CTI_RUNTIME=" "$CTI_HOME/config.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"' || true)
-  runtime="${runtime:-claude}"
+  runtime=$(grep "^ITI_RUNTIME=" "$ITI_HOME/config.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"' || true)
+  runtime="${runtime:-iflow}"
 
-  local mode="${CTI_ENV_ISOLATION:-strict}"
+  local mode="${ITI_ENV_ISOLATION:-strict}"
   if [ "$mode" = "strict" ]; then
     case "$runtime" in
       codex)
@@ -43,8 +44,8 @@ clean_env() {
           case "$name" in ANTHROPIC_*) unset "$name" 2>/dev/null || true ;; esac
         done < <(env)
         ;;
-      claude)
-        if [ "${CTI_ANTHROPIC_PASSTHROUGH:-}" != "true" ]; then
+      iflow)
+        if [ "${ITI_ANTHROPIC_PASSTHROUGH:-}" != "true" ]; then
           while IFS='=' read -r name _; do
             case "$name" in ANTHROPIC_*) unset "$name" 2>/dev/null || true ;; esac
           done < <(env)
@@ -54,7 +55,7 @@ clean_env() {
         done < <(env)
         ;;
       auto)
-        if [ "${CTI_ANTHROPIC_PASSTHROUGH:-}" != "true" ]; then
+        if [ "${ITI_ANTHROPIC_PASSTHROUGH:-}" != "true" ]; then
           while IFS='=' read -r name _; do
             case "$name" in ANTHROPIC_*) unset "$name" 2>/dev/null || true ;; esac
           done < <(env)
@@ -74,13 +75,13 @@ pid_alive() {
 }
 
 status_running() {
-  [ -f "$STATUS_FILE" ] && grep -q '"running"[[:space:]]*:[[:space:]]*true' "$STATUS_FILE" 2>/dev/null
+  [ -f "$STATUS_FILE" ] && grep -q '"running"[[[:space:]]*:[[[:space:]]*true' "$STATUS_FILE" 2>/dev/null
 }
 
 show_last_exit_reason() {
   if [ -f "$STATUS_FILE" ]; then
     local reason
-    reason=$(grep -o '"lastExitReason"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATUS_FILE" 2>/dev/null | head -1 | sed 's/.*: *"//;s/"$//')
+    reason=$(grep -o '"lastExitReason"[[[:space:]]*:[[[:space:]]*"[[^"]*"' "$STATUS_FILE" 2>/dev/null | head -1 | sed 's/.*: *"//;s/"$//')
     [ -n "$reason" ] && echo "Last exit reason: $reason"
   fi
 }
@@ -130,9 +131,9 @@ case "${1:-help}" in
       exit 1
     fi
 
-    # Source config.env BEFORE clean_env so that CTI_ANTHROPIC_PASSTHROUGH
-    # and other CTI_* flags are available when clean_env checks them.
-    [ -f "$CTI_HOME/config.env" ] && set -a && source "$CTI_HOME/config.env" && set +a
+    # Source config.env BEFORE clean_env so that ITI_ANTHROPIC_PASSTHROUGH
+    # and other ITI_* flags are available when clean_env checks them.
+    [ -f "$ITI_HOME/config.env" ] && set -a && source "$ITI_HOME/config.env" && set +a
 
     clean_env
     echo "Starting bridge..."
@@ -213,7 +214,7 @@ case "${1:-help}" in
 
   logs)
     N="${2:-50}"
-    tail -n "$N" "$LOG_FILE" 2>/dev/null | sed -E 's/(token|secret|password)(["\\x27]?\s*[:=]\s*["\\x27]?)[^ "]+/\1\2*****/gi'
+    tail -n "$N" "$LOG_FILE" 2>/dev/null | sed -E 's/(token|secret|password)(["\x27]?\s*[:=]\s*["\x27]?)[^ "]+/\1\2*****/gi'
     ;;
 
   *)

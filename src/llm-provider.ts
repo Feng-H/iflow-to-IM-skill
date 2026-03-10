@@ -1,8 +1,8 @@
 /**
- * LLM Provider using @anthropic-ai/claude-agent-sdk query() function.
+ * LLM Provider using iFlow CLI.
  *
  * Converts SDK stream events into the SSE format expected by
- * the claude-to-im bridge conversation engine.
+ * the iflow-to-im bridge conversation engine.
  */
 
 import fs from 'node:fs';
@@ -28,17 +28,17 @@ const ENV_WHITELIST = new Set([
 ]);
 
 /** Prefixes that are always stripped (even in inherit mode). */
-const ENV_ALWAYS_STRIP = ['CLAUDECODE'];
+const ENV_ALWAYS_STRIP = ['CLAUDECODE', 'IFLOWCODE'];
 
 /**
  * Build a clean env for the CLI subprocess.
  *
- * CTI_ENV_ISOLATION (default "strict"):
- *   "strict"  — only whitelist + CTI_* + ANTHROPIC_* from config.env
- *   "inherit" — full parent env minus CLAUDECODE
+ * ITI_ENV_ISOLATION (default "strict"):
+ *   "strict"  — only whitelist + ITI_* + ANTHROPIC_* from config.env
+ *   "inherit" — full parent env minus IFLOWCODE
  */
 export function buildSubprocessEnv(): Record<string, string> {
-  const mode = process.env.CTI_ENV_ISOLATION || 'strict';
+  const mode = process.env.ITI_ENV_ISOLATION || 'strict';
   const out: Record<string, string> = {};
 
   if (mode === 'inherit') {
@@ -53,19 +53,19 @@ export function buildSubprocessEnv(): Record<string, string> {
     for (const [k, v] of Object.entries(process.env)) {
       if (v === undefined) continue;
       if (ENV_WHITELIST.has(k)) { out[k] = v; continue; }
-      // Pass through CTI_* so skill config is available
-      if (k.startsWith('CTI_')) { out[k] = v; continue; }
+      // Pass through ITI_* so skill config is available
+      if (k.startsWith('ITI_')) { out[k] = v; continue; }
     }
     // ANTHROPIC_* should come from config.env, not parent process.
-    // Only pass them if CTI_ANTHROPIC_PASSTHROUGH is explicitly set.
-    if (process.env.CTI_ANTHROPIC_PASSTHROUGH === 'true') {
+    // Only pass them if ITI_ANTHROPIC_PASSTHROUGH is explicitly set.
+    if (process.env.ITI_ANTHROPIC_PASSTHROUGH === 'true') {
       for (const [k, v] of Object.entries(process.env)) {
         if (v !== undefined && k.startsWith('ANTHROPIC_')) out[k] = v;
       }
     }
 
     // In codex/auto mode, pass through OPENAI_* / CODEX_* env vars
-    const runtime = process.env.CTI_RUNTIME || 'claude';
+    const runtime = process.env.ITI_RUNTIME || 'iflow';
     if (runtime === 'codex' || runtime === 'auto') {
       for (const [k, v] of Object.entries(process.env)) {
         if (v !== undefined && (k.startsWith('OPENAI_') || k.startsWith('CODEX_'))) out[k] = v;
@@ -76,7 +76,7 @@ export function buildSubprocessEnv(): Record<string, string> {
   return out;
 }
 
-// ── Claude CLI path resolution ──
+// ── iFlow CLI path resolution ──
 
 function isExecutable(p: string): boolean {
   try {
@@ -88,17 +88,17 @@ function isExecutable(p: string): boolean {
 }
 
 /**
- * Resolve the path to the `claude` CLI executable.
- * Priority: CTI_CLAUDE_CODE_EXECUTABLE env → which/where command → common install paths.
+ * Resolve the path to the `iflow` CLI executable.
+ * Priority: ITI_IFLOW_CLI_EXECUTABLE env → which/where command → common install paths.
  */
-export function resolveClaudeCliPath(): string | undefined {
+export function resolveIflowCliPath(): string | undefined {
   // 1. Explicit env var
-  const fromEnv = process.env.CTI_CLAUDE_CODE_EXECUTABLE;
+  const fromEnv = process.env.ITI_IFLOW_CLI_EXECUTABLE;
   if (fromEnv && isExecutable(fromEnv)) return fromEnv;
 
   // 2. Platform-specific command (which for Unix, where for Windows)
   const isWindows = process.platform === 'win32';
-  const cmd = isWindows ? 'where claude' : 'which claude';
+  const cmd = isWindows ? 'where iflow' : 'which iflow';
   try {
     const resolved = execSync(cmd, { encoding: 'utf-8', timeout: 3000 }).trim().split('\n')[0];
     if (resolved && isExecutable(resolved)) return resolved;
@@ -109,15 +109,15 @@ export function resolveClaudeCliPath(): string | undefined {
   // 3. Common install locations
   const candidates = isWindows
     ? [
-        process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\claude\\claude.exe` : '',
-        'C:\\Program Files\\claude\\claude.exe',
+        process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\iflow\\iflow.exe` : '',
+        'C:\\Program Files\\iflow\\iflow.exe',
       ].filter(Boolean)
     : [
-        '/usr/local/bin/claude',
-        '/opt/homebrew/bin/claude',
-        `${process.env.HOME}/.npm-global/bin/claude`,
-        `${process.env.HOME}/.local/bin/claude`,
-        `${process.env.HOME}/.claude/local/claude`,
+        '/usr/local/bin/iflow',
+        '/opt/homebrew/bin/iflow',
+        `${process.env.HOME}/.npm-global/bin/iflow`,
+        `${process.env.HOME}/.local/bin/iflow`,
+        `${process.env.HOME}/.iflow/local/iflow`,
       ];
   for (const p of candidates) {
     if (p && isExecutable(p)) return p;

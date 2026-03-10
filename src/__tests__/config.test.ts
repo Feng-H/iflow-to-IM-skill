@@ -28,7 +28,7 @@ describe('maskSecret', () => {
 
 describe('configToSettings', () => {
   const base: Config = {
-    runtime: 'claude',
+    runtime: 'iflow',
     enabledChannels: [],
     defaultWorkDir: '/tmp/test',
     defaultMode: 'code',
@@ -137,6 +137,42 @@ describe('configToSettings', () => {
     assert.equal(m.has('bridge_qq_max_image_size'), false);
   });
 
+  // ── WeCom (企业微信) ──
+
+  it('sets bridge_wecom_enabled based on enabledChannels', () => {
+    const m = configToSettings({ ...base, enabledChannels: ['wecom'] });
+    assert.equal(m.get('bridge_wecom_enabled'), 'true');
+    assert.equal(m.get('bridge_telegram_enabled'), 'false');
+  });
+
+  it('defaults bridge_wecom_enabled to false', () => {
+    const m = configToSettings(base);
+    assert.equal(m.get('bridge_wecom_enabled'), 'false');
+  });
+
+  it('maps wecom config fields', () => {
+    const m = configToSettings({
+      ...base,
+      enabledChannels: ['wecom'],
+      wecomBotId: 'bot-id-123',
+      wecomSecret: 'secret-abc',
+      wecomAllowedUsers: ['user1', 'user2'],
+    });
+    assert.equal(m.get('bridge_wecom_bot_id'), 'bot-id-123');
+    assert.equal(m.get('bridge_wecom_secret'), 'secret-abc');
+    assert.equal(m.get('bridge_wecom_allowed_users'), 'user1,user2');
+  });
+
+  it('omits wecom optional fields when not set', () => {
+    const m = configToSettings({
+      ...base,
+      enabledChannels: ['wecom'],
+      wecomBotId: 'bot-id',
+      wecomSecret: 'secret',
+    });
+    assert.equal(m.has('bridge_wecom_allowed_users'), false);
+  });
+
   it('maps workdir and mode, omits model when not set', () => {
     const m = configToSettings(base);
     assert.equal(m.get('bridge_default_work_dir'), '/tmp/test');
@@ -171,9 +207,9 @@ describe('loadConfig/saveConfig round-trip', () => {
   let origHome: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cti-config-test-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'iti-config-test-'));
     origHome = process.env.HOME || '';
-    // We can't easily override CTI_HOME since it's a const,
+    // We can't easily override ITI_HOME since it's a const,
     // so we test the parsing logic indirectly through configToSettings
   });
 
@@ -184,7 +220,7 @@ describe('loadConfig/saveConfig round-trip', () => {
 
   it('configToSettings returns correct defaults', () => {
     const m = configToSettings({
-      runtime: 'claude',
+      runtime: 'iflow',
       enabledChannels: [],
       defaultWorkDir: process.cwd(),
       defaultMode: 'code',
@@ -193,5 +229,6 @@ describe('loadConfig/saveConfig round-trip', () => {
     assert.equal(m.get('bridge_discord_enabled'), 'false');
     assert.equal(m.get('bridge_feishu_enabled'), 'false');
     assert.equal(m.get('bridge_qq_enabled'), 'false');
+    assert.equal(m.get('bridge_wecom_enabled'), 'false');
   });
 });

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # macOS supervisor — launchd-based process management.
-# Sourced by daemon.sh; expects CTI_HOME, SKILL_DIR, PID_FILE, STATUS_FILE, LOG_FILE.
+# Sourced by daemon.sh; expects ITI_HOME, SKILL_DIR, PID_FILE, STATUS_FILE, LOG_FILE.
 
-LAUNCHD_LABEL="com.claude-to-im.bridge"
+LAUNCHD_LABEL="com.iflow-to-im.bridge"
 PLIST_DIR="$HOME/Library/LaunchAgents"
 PLIST_FILE="$PLIST_DIR/$LAUNCHD_LABEL.plist"
 
@@ -21,21 +21,21 @@ build_env_dict() {
     dict+="${indent}<key>${var}</key>\n${indent}<string>${val}</string>\n"
   done
 
-  # Forward CTI_* vars
+  # Forward ITI_* vars
   while IFS='=' read -r name val; do
-    case "$name" in CTI_*)
+    case "$name" in ITI_*)
       dict+="${indent}<key>${name}</key>\n${indent}<string>${val}</string>\n"
       ;; esac
   done < <(env)
 
   # Forward runtime-specific API keys
   local runtime
-  runtime=$(grep "^CTI_RUNTIME=" "$CTI_HOME/config.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"' || true)
-  runtime="${runtime:-claude}"
+  runtime=$(grep "^ITI_RUNTIME=" "$ITI_HOME/config.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d "'" | tr -d '"' || true)
+  runtime="${runtime:-iflow}"
 
   case "$runtime" in
     codex|auto)
-      for var in OPENAI_API_KEY CODEX_API_KEY CTI_CODEX_API_KEY CTI_CODEX_BASE_URL; do
+      for var in OPENAI_API_KEY CODEX_API_KEY ITI_CODEX_API_KEY ITI_CODEX_BASE_URL; do
         local val="${!var:-}"
         [ -z "$val" ] && continue
         dict+="${indent}<key>${var}</key>\n${indent}<string>${val}</string>\n"
@@ -43,8 +43,8 @@ build_env_dict() {
       ;;
   esac
   case "$runtime" in
-    claude|auto)
-      if [ "${CTI_ANTHROPIC_PASSTHROUGH:-}" = "true" ]; then
+    iflow|auto)
+      if [ "${ITI_ANTHROPIC_PASSTHROUGH:-}" = "true" ]; then
         for var in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN; do
           local val="${!var:-}"
           [ -z "$val" ] && continue

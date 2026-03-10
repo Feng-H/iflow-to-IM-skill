@@ -245,7 +245,7 @@ describe('CodexProvider', () => {
     assert.equal(chunks.length, 0);
   });
 
-  it('does not pass model by default and skips stale Claude resume id', async () => {
+  it('does not pass model by default and skips stale iFlow resume id', async () => {
     const { CodexProvider } = await import('../codex-provider.js');
     const { PendingPermissions } = await import('../permission-gateway.js');
     const provider = new CodexProvider(new PendingPermissions());
@@ -278,13 +278,13 @@ describe('CodexProvider', () => {
     const stream = provider.streamChat({
       prompt: 'hello',
       sessionId: 'model-default-session',
-      sdkSessionId: 'old-claude-session-id',
+      sdkSessionId: 'old-iflow-session-id',
       model: 'claude-sonnet-4-20250514',
     });
 
     await collectStream(stream);
 
-    assert.equal(resumeCalls, 0, 'Should skip resume for stale Claude-model session in Codex runtime');
+    assert.equal(resumeCalls, 0, 'Should skip resume for stale iFlow-model session in Codex runtime');
     assert.equal(startCalls, 1, 'Should start a fresh Codex thread');
     assert.ok(capturedStartOptions, 'startThread options should be captured');
     assert.ok(!Object.prototype.hasOwnProperty.call(capturedStartOptions!, 'model'), 'Model should not be forwarded by default');

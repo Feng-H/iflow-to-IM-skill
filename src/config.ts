@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 export interface Config {
-  runtime: 'claude' | 'codex' | 'auto';
+  runtime: 'iflow' | 'codex' | 'auto';
   enabledChannels: string[];
   defaultWorkDir: string;
   defaultModel?: string;
@@ -28,12 +28,16 @@ export interface Config {
   qqAllowedUsers?: string[];
   qqImageEnabled?: boolean;
   qqMaxImageSize?: number;
+  // WeCom (企业微信) - 智能机器人长连接配置
+  wecomBotId?: string;
+  wecomSecret?: string;
+  wecomAllowedUsers?: string[];
   // Auto-approve all tool permission requests without user confirmation
   autoApprove?: boolean;
 }
 
-export const CTI_HOME = process.env.CTI_HOME || path.join(os.homedir(), ".claude-to-im");
-export const CONFIG_PATH = path.join(CTI_HOME, "config.env");
+export const ITI_HOME = process.env.ITI_HOME || path.join(os.homedir(), ".iflow-to-im");
+export const CONFIG_PATH = path.join(ITI_HOME, "config.env");
 
 function parseEnvFile(content: string): Map<string, string> {
   const entries = new Map<string, string>();
@@ -73,38 +77,42 @@ export function loadConfig(): Config {
     // Config file doesn't exist yet — use defaults
   }
 
-  const rawRuntime = env.get("CTI_RUNTIME") || "claude";
-  const runtime = (["claude", "codex", "auto"].includes(rawRuntime) ? rawRuntime : "claude") as Config["runtime"];
+  const rawRuntime = env.get("ITI_RUNTIME") || "iflow";
+  const runtime = (["iflow", "codex", "auto"].includes(rawRuntime) ? rawRuntime : "iflow") as Config["runtime"];
 
   return {
     runtime,
-    enabledChannels: splitCsv(env.get("CTI_ENABLED_CHANNELS")) ?? [],
-    defaultWorkDir: env.get("CTI_DEFAULT_WORKDIR") || process.cwd(),
-    defaultModel: env.get("CTI_DEFAULT_MODEL") || undefined,
-    defaultMode: env.get("CTI_DEFAULT_MODE") || "code",
-    tgBotToken: env.get("CTI_TG_BOT_TOKEN") || undefined,
-    tgChatId: env.get("CTI_TG_CHAT_ID") || undefined,
-    tgAllowedUsers: splitCsv(env.get("CTI_TG_ALLOWED_USERS")),
-    feishuAppId: env.get("CTI_FEISHU_APP_ID") || undefined,
-    feishuAppSecret: env.get("CTI_FEISHU_APP_SECRET") || undefined,
-    feishuDomain: env.get("CTI_FEISHU_DOMAIN") || undefined,
-    feishuAllowedUsers: splitCsv(env.get("CTI_FEISHU_ALLOWED_USERS")),
-    discordBotToken: env.get("CTI_DISCORD_BOT_TOKEN") || undefined,
-    discordAllowedUsers: splitCsv(env.get("CTI_DISCORD_ALLOWED_USERS")),
+    enabledChannels: splitCsv(env.get("ITI_ENABLED_CHANNELS")) ?? [],
+    defaultWorkDir: env.get("ITI_DEFAULT_WORKDIR") || process.cwd(),
+    defaultModel: env.get("ITI_DEFAULT_MODEL") || undefined,
+    defaultMode: env.get("ITI_DEFAULT_MODE") || "code",
+    tgBotToken: env.get("ITI_TG_BOT_TOKEN") || undefined,
+    tgChatId: env.get("ITI_TG_CHAT_ID") || undefined,
+    tgAllowedUsers: splitCsv(env.get("ITI_TG_ALLOWED_USERS")),
+    feishuAppId: env.get("ITI_FEISHU_APP_ID") || undefined,
+    feishuAppSecret: env.get("ITI_FEISHU_APP_SECRET") || undefined,
+    feishuDomain: env.get("ITI_FEISHU_DOMAIN") || undefined,
+    feishuAllowedUsers: splitCsv(env.get("ITI_FEISHU_ALLOWED_USERS")),
+    discordBotToken: env.get("ITI_DISCORD_BOT_TOKEN") || undefined,
+    discordAllowedUsers: splitCsv(env.get("ITI_DISCORD_ALLOWED_USERS")),
     discordAllowedChannels: splitCsv(
-      env.get("CTI_DISCORD_ALLOWED_CHANNELS")
+      env.get("ITI_DISCORD_ALLOWED_CHANNELS")
     ),
-    discordAllowedGuilds: splitCsv(env.get("CTI_DISCORD_ALLOWED_GUILDS")),
-    qqAppId: env.get("CTI_QQ_APP_ID") || undefined,
-    qqAppSecret: env.get("CTI_QQ_APP_SECRET") || undefined,
-    qqAllowedUsers: splitCsv(env.get("CTI_QQ_ALLOWED_USERS")),
-    qqImageEnabled: env.has("CTI_QQ_IMAGE_ENABLED")
-      ? env.get("CTI_QQ_IMAGE_ENABLED") === "true"
+    discordAllowedGuilds: splitCsv(env.get("ITI_DISCORD_ALLOWED_GUILDS")),
+    qqAppId: env.get("ITI_QQ_APP_ID") || undefined,
+    qqAppSecret: env.get("ITI_QQ_APP_SECRET") || undefined,
+    qqAllowedUsers: splitCsv(env.get("ITI_QQ_ALLOWED_USERS")),
+    qqImageEnabled: env.has("ITI_QQ_IMAGE_ENABLED")
+      ? env.get("ITI_QQ_IMAGE_ENABLED") === "true"
       : undefined,
-    qqMaxImageSize: env.get("CTI_QQ_MAX_IMAGE_SIZE")
-      ? Number(env.get("CTI_QQ_MAX_IMAGE_SIZE"))
+    qqMaxImageSize: env.get("ITI_QQ_MAX_IMAGE_SIZE")
+      ? Number(env.get("ITI_QQ_MAX_IMAGE_SIZE"))
       : undefined,
-    autoApprove: env.get("CTI_AUTO_APPROVE") === "true",
+    // WeCom (企业微信) - 长连接模式
+    wecomBotId: env.get("ITI_WECOM_BOT_ID") || undefined,
+    wecomSecret: env.get("ITI_WECOM_SECRET") || undefined,
+    wecomAllowedUsers: splitCsv(env.get("ITI_WECOM_ALLOWED_USERS")),
+    autoApprove: env.get("ITI_AUTO_APPROVE") === "true",
   };
 }
 
@@ -115,52 +123,60 @@ function formatEnvLine(key: string, value: string | undefined): string {
 
 export function saveConfig(config: Config): void {
   let out = "";
-  out += formatEnvLine("CTI_RUNTIME", config.runtime);
+  out += formatEnvLine("ITI_RUNTIME", config.runtime);
   out += formatEnvLine(
-    "CTI_ENABLED_CHANNELS",
+    "ITI_ENABLED_CHANNELS",
     config.enabledChannels.join(",")
   );
-  out += formatEnvLine("CTI_DEFAULT_WORKDIR", config.defaultWorkDir);
-  if (config.defaultModel) out += formatEnvLine("CTI_DEFAULT_MODEL", config.defaultModel);
-  out += formatEnvLine("CTI_DEFAULT_MODE", config.defaultMode);
-  out += formatEnvLine("CTI_TG_BOT_TOKEN", config.tgBotToken);
-  out += formatEnvLine("CTI_TG_CHAT_ID", config.tgChatId);
+  out += formatEnvLine("ITI_DEFAULT_WORKDIR", config.defaultWorkDir);
+  if (config.defaultModel) out += formatEnvLine("ITI_DEFAULT_MODEL", config.defaultModel);
+  out += formatEnvLine("ITI_DEFAULT_MODE", config.defaultMode);
+  out += formatEnvLine("ITI_TG_BOT_TOKEN", config.tgBotToken);
+  out += formatEnvLine("ITI_TG_CHAT_ID", config.tgChatId);
   out += formatEnvLine(
-    "CTI_TG_ALLOWED_USERS",
+    "ITI_TG_ALLOWED_USERS",
     config.tgAllowedUsers?.join(",")
   );
-  out += formatEnvLine("CTI_FEISHU_APP_ID", config.feishuAppId);
-  out += formatEnvLine("CTI_FEISHU_APP_SECRET", config.feishuAppSecret);
-  out += formatEnvLine("CTI_FEISHU_DOMAIN", config.feishuDomain);
+  out += formatEnvLine("ITI_FEISHU_APP_ID", config.feishuAppId);
+  out += formatEnvLine("ITI_FEISHU_APP_SECRET", config.feishuAppSecret);
+  out += formatEnvLine("ITI_FEISHU_DOMAIN", config.feishuDomain);
   out += formatEnvLine(
-    "CTI_FEISHU_ALLOWED_USERS",
+    "ITI_FEISHU_ALLOWED_USERS",
     config.feishuAllowedUsers?.join(",")
   );
-  out += formatEnvLine("CTI_DISCORD_BOT_TOKEN", config.discordBotToken);
+  out += formatEnvLine("ITI_DISCORD_BOT_TOKEN", config.discordBotToken);
   out += formatEnvLine(
-    "CTI_DISCORD_ALLOWED_USERS",
+    "ITI_DISCORD_ALLOWED_USERS",
     config.discordAllowedUsers?.join(",")
   );
   out += formatEnvLine(
-    "CTI_DISCORD_ALLOWED_CHANNELS",
+    "ITI_DISCORD_ALLOWED_CHANNELS",
     config.discordAllowedChannels?.join(",")
   );
   out += formatEnvLine(
-    "CTI_DISCORD_ALLOWED_GUILDS",
+    "ITI_DISCORD_ALLOWED_GUILDS",
     config.discordAllowedGuilds?.join(",")
   );
-  out += formatEnvLine("CTI_QQ_APP_ID", config.qqAppId);
-  out += formatEnvLine("CTI_QQ_APP_SECRET", config.qqAppSecret);
+  out += formatEnvLine("ITI_QQ_APP_ID", config.qqAppId);
+  out += formatEnvLine("ITI_QQ_APP_SECRET", config.qqAppSecret);
   out += formatEnvLine(
-    "CTI_QQ_ALLOWED_USERS",
+    "ITI_QQ_ALLOWED_USERS",
     config.qqAllowedUsers?.join(",")
   );
   if (config.qqImageEnabled !== undefined)
-    out += formatEnvLine("CTI_QQ_IMAGE_ENABLED", String(config.qqImageEnabled));
+    out += formatEnvLine("ITI_QQ_IMAGE_ENABLED", String(config.qqImageEnabled));
   if (config.qqMaxImageSize !== undefined)
-    out += formatEnvLine("CTI_QQ_MAX_IMAGE_SIZE", String(config.qqMaxImageSize));
+    out += formatEnvLine("ITI_QQ_MAX_IMAGE_SIZE", String(config.qqMaxImageSize));
 
-  fs.mkdirSync(CTI_HOME, { recursive: true });
+  // WeCom (企业微信) - 长连接模式
+  out += formatEnvLine("ITI_WECOM_BOT_ID", config.wecomBotId);
+  out += formatEnvLine("ITI_WECOM_SECRET", config.wecomSecret);
+  out += formatEnvLine(
+    "ITI_WECOM_ALLOWED_USERS",
+    config.wecomAllowedUsers?.join(",")
+  );
+
+  fs.mkdirSync(ITI_HOME, { recursive: true });
   const tmpPath = CONFIG_PATH + ".tmp";
   fs.writeFileSync(tmpPath, out, { mode: 0o600 });
   fs.renameSync(tmpPath, CONFIG_PATH);
@@ -239,6 +255,18 @@ export function configToSettings(config: Config): Map<string, string> {
     m.set("bridge_qq_image_enabled", String(config.qqImageEnabled));
   if (config.qqMaxImageSize !== undefined)
     m.set("bridge_qq_max_image_size", String(config.qqMaxImageSize));
+
+  // ── WeCom (企业微信) - 长连接模式 ──
+  // Upstream keys: bridge_wecom_enabled, bridge_wecom_bot_id, bridge_wecom_secret,
+  //   bridge_wecom_allowed_users
+  m.set(
+    "bridge_wecom_enabled",
+    config.enabledChannels.includes("wecom") ? "true" : "false"
+  );
+  if (config.wecomBotId) m.set("bridge_wecom_bot_id", config.wecomBotId);
+  if (config.wecomSecret) m.set("bridge_wecom_secret", config.wecomSecret);
+  if (config.wecomAllowedUsers)
+    m.set("bridge_wecom_allowed_users", config.wecomAllowedUsers.join(","));
 
   // ── Defaults ──
   // Upstream keys: bridge_default_work_dir, bridge_default_model, default_model
