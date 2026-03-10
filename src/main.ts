@@ -17,7 +17,7 @@ import type { LLMProvider } from 'claude-to-im/src/lib/bridge/host.js';
 import { loadConfig, configToSettings, ITI_HOME } from './config.js';
 import type { Config } from './config.js';
 import { JsonFileStore } from './store.js';
-import { SDKLLMProvider, resolveIflowCliPath } from './llm-provider.js';
+import { SDKLLMProvider, IflowDirectProvider, resolveIflowCliPath } from './llm-provider.js';
 import { PendingPermissions } from './permission-gateway.js';
 import { setupLogger } from './logger.js';
 
@@ -43,14 +43,14 @@ async function resolveProvider(config: Config, pendingPerms: PendingPermissions)
     const cliPath = resolveIflowCliPath();
     if (cliPath) {
       console.log(`[iflow-to-im] Auto: using iFlow CLI at ${cliPath}`);
-      return new SDKLLMProvider(pendingPerms, cliPath, config.autoApprove);
+      return new IflowDirectProvider(pendingPerms, cliPath);
     }
     console.log('[iflow-to-im] Auto: iFlow CLI not found, falling back to Codex');
     const { CodexProvider } = await import('./codex-provider.js');
     return new CodexProvider(pendingPerms);
   }
 
-  // Default: iflow
+  // Default: iflow - use direct provider (SDK is for Claude Code CLI, not iFlow CLI)
   const cliPath = resolveIflowCliPath();
   if (!cliPath) {
     console.error(
@@ -61,8 +61,8 @@ async function resolveProvider(config: Config, pendingPerms: PendingPermissions)
     );
     process.exit(1);
   }
-  console.log(`[iflow-to-im] Using iFlow CLI: ${cliPath}`);
-  return new SDKLLMProvider(pendingPerms, cliPath, config.autoApprove);
+  console.log(`[iflow-to-im] Using iFlow CLI (direct): ${cliPath}`);
+  return new IflowDirectProvider(pendingPerms, cliPath);
 }
 
 interface StatusInfo {
@@ -86,8 +86,38 @@ function writeStatus(info: StatusInfo): void {
 }
 
 async function main(): Promise<void> {
+  // Load config.env into process.env for llm-provider.ts
+  // This must happen before any code that reads process.env.ITI_*
+  try {
+    const content = fs.readFileSync(path.join(ITI_HOME, 'config.env'), 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      let value = trimmed.slice(eqIdx + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if ((key.startsWith('ITI_') || key.startsWith('ANTHROPIC_') || key.startsWith('OPENAI_') || key.startsWith('CODEX_')) && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  } catch { /* config.env may not exist yet */ }
+
+  // Debug: verify env vars are loaded (before setupLogger)
+  const debugEnv = {
+    ITI_ENV_ISOLATION: process.env.ITI_ENV_ISOLATION || 'NOT SET',
+    ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL || 'NOT SET',
+    ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN ? 'SET' : 'NOT SET',
+  };
+  
   const config = loadConfig();
   setupLogger();
+
+  // Now log the debug info
+  console.log('[iflow-to-im] Env check:', JSON.stringify(debugEnv));
 
   const runId = crypto.randomUUID();
   console.log(`[iflow-to-im] Starting bridge (run_id: ${runId})`);

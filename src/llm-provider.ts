@@ -41,6 +41,10 @@ export function buildSubprocessEnv(): Record<string, string> {
   const mode = process.env.ITI_ENV_ISOLATION || 'strict';
   const out: Record<string, string> = {};
 
+  // Debug: log what we're working with
+  console.log('[llm-provider] buildSubprocessEnv mode:', mode);
+  console.log('[llm-provider] ANTHROPIC_BASE_URL in process.env:', process.env.ANTHROPIC_BASE_URL || 'NOT SET');
+
   if (mode === 'inherit') {
     // Pass everything except always-stripped vars
     for (const [k, v] of Object.entries(process.env)) {
@@ -192,6 +196,8 @@ export class SDKLLMProvider implements LLMProvider {
         (async () => {
           try {
             const cleanEnv = buildSubprocessEnv();
+            console.log('[llm-provider] buildSubprocessEnv mode:', process.env.ITI_ENV_ISOLATION || 'strict');
+            console.log('[llm-provider] ANTHROPIC_BASE_URL in cleanEnv:', cleanEnv.ANTHROPIC_BASE_URL ? 'SET' : 'NOT SET');
 
             const queryOptions: Record<string, unknown> = {
               cwd: params.workingDirectory,
@@ -256,6 +262,83 @@ export class SDKLLMProvider implements LLMProvider {
             // Send simplified but actionable summary to IM
             controller.enqueue(sseEvent('error', message));
             controller.close();
+          }
+        })();
+      },
+    });
+  }
+}
+
+/**
+ * Simple iflow CLI Provider that directly spawns iflow process.
+ * Used when SDK is not compatible with the CLI (e.g., iFlow CLI).
+ */
+export class IflowDirectProvider implements LLMProvider {
+  private cliPath: string;
+
+  constructor(private pendingPerms: PendingPermissions, cliPath: string) {
+    this.cliPath = cliPath;
+  }
+
+  streamChat(params: StreamChatParams): ReadableStream<string> {
+    const cliPath = this.cliPath;
+
+    return new ReadableStream({
+      start(controller) {
+        (async () => {
+          const { spawn } = await import('node:child_process');
+          const cleanEnv = buildSubprocessEnv();
+
+          console.log('[iflow-direct] Spawning:', cliPath, 'with prompt:', params.prompt.slice(0, 50));
+          console.log('[iflow-direct] ANTHROPIC_BASE_URL:', cleanEnv.ANTHROPIC_BASE_URL || 'not set');
+
+          const args = ['-p', params.prompt];
+          if (params.model) args.push('-m', params.model);
+          if (params.permissionMode === 'acceptEdits') args.push('-y'); // YOLO mode
+
+          const child = spawn(cliPath, args, {
+            cwd: params.workingDirectory,
+            env: cleanEnv,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+
+          let output = '';
+          let errorOutput = '';
+
+          child.stdout.on('data', (data: Buffer) => {
+            const text = data.toString();
+            output += text;
+            // Stream text output
+            controller.enqueue(sseEvent('text', text));
+          });
+
+          child.stderr.on('data', (data: Buffer) => {
+            errorOutput += data.toString();
+          });
+
+          child.on('close', (code) => {
+            if (code !== 0) {
+              console.error('[iflow-direct] Process exited with code:', code);
+              console.error('[iflow-direct] stderr:', errorOutput);
+              controller.enqueue(sseEvent('error', `Process exited with code ${code}: ${errorOutput.slice(0, 200)}`));
+            } else {
+              console.log('[iflow-direct] Success, output length:', output.length);
+              controller.enqueue(sseEvent('result', { session_id: '', is_error: false }));
+            }
+            controller.close();
+          });
+
+          child.on('error', (err) => {
+            console.error('[iflow-direct] Spawn error:', err);
+            controller.enqueue(sseEvent('error', err.message));
+            controller.close();
+          });
+
+          // Handle abort
+          if (params.abortController?.signal) {
+            params.abortController.signal.addEventListener('abort', () => {
+              child.kill('SIGTERM');
+            });
           }
         })();
       },
